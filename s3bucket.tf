@@ -12,12 +12,18 @@ provider "aws" {
   region = "us-east-1"
 }
 
+#Define bucket name
+locals {
+  bucket_names = ["pocbucket1", "pocbucket2"]
+}
+
 # Create bucket using regional-namespace
 data "aws_caller_identity" "current" {}
 data "aws_region" "current" {}
 
 resource "aws_s3_bucket" "pocproject" {
-  bucket           = format("pocbucket-%s-%s-an", data.aws_caller_identity.current.account_id, data.aws_region.current.region)
+  for_each         = toset(local.bucket_names)
+  bucket           = format("%s-%s-%s-an", each.key, data.aws_caller_identity.current.account_id, data.aws_region.current.region)
   bucket_namespace = "account-regional"
 
   tags = {
@@ -27,14 +33,30 @@ resource "aws_s3_bucket" "pocproject" {
 }
 
 #Upload two objects to bucket
-resource "aws_s3_object" "pocobject" {
-  for_each = toset(["index.html", "error.html"])
-  bucket   = aws_s3_bucket.pocproject.id
-  key      = each.value
-  source   = "${path.module}/${each.value}"
-  content_type = "text/html"
+locals {
+  objects = {
+    "index.html" = "${path.module}/index.html"
+    "error.html" = "${path.module}/error.html"
+  }
 }
 
+resource "aws_s3_object" "pocobject" {
+  for_each = {
+    for pair in setproduct(
+      keys(aws_s3_bucket.pocproject),
+      keys(local.objects)
+    ) :
+    "${pair[0]}-${pair[1]}" => {
+      bucket = pair[0]
+      key    = pair[1]
+      source = local.objects[pair[1]]
+    }
+  }
+  bucket       = aws_s3_bucket.pocproject[each.value.bucket].id
+  key          = each.value.key
+  source       = each.value.source
+  content_type = "text/html"
+}
 
 
 #Block all public access
@@ -48,51 +70,85 @@ resource "aws_s3_object" "pocobject" {
 
 #Adding bucket policy
 resource "aws_s3_bucket_policy" "cloudfront_policy" {
-bucket = aws_s3_bucket.pocproject.id
-policy = data.aws_iam_policy_document.cloudfront_policy.json
+  for_each = aws_s3_bucket.pocproject
+  bucket   = each.value.id
+  policy   = data.aws_iam_policy_document.cloudfront_policy[each.key].json
 }
 
 data "aws_iam_policy_document" "cloudfront_policy" {
-statement {
-sid = "allowCloudfrontAccess"
-effect = "Allow"
-principals {
-type = "Service"
-identifiers = ["cloudfront.amazonaws.com"]
+  for_each = aws_s3_bucket.pocproject
+  statement {
+    sid    = "allowCloudfrontAccess"
+    effect = "Allow"
+    principals {
+      type        = "Service"
+      identifiers = ["cloudfront.amazonaws.com"]
+    }
+    actions = ["s3:GetObject"]
+    resources = [
+      "${each.value.arn}/*"
+    ]
+    condition {
+      test     = "StringEquals"
+      variable = "AWS:SourceArn"
+      values   = [aws_cloudfront_distribution.poc_distribution.arn]
+    }
+  }
 }
-actions = ["s3:GetObject"]
-resources = [
-	"${aws_s3_bucket.pocproject.arn}/*"
-	]
-condition {
-test = "StringEquals"
-variable = "AWS:SourceArn"
-values = [aws_cloudfront_distribution.poc_distribution.arn]
-}
-}
+
+#Enabling versioning
+resource "aws_s3_bucket_versioning" "poc_versioning" {
+  for_each = aws_s3_bucket.pocproject
+  bucket   = each.value.id
+  versioning_configuration {
+    status = "Enabled"
+  }
 }
 
 #Creating origin access control
 resource "aws_cloudfront_origin_access_control" "pocoac" {
-name = "myoac"
-origin_access_control_origin_type = "s3"
-signing_behavior = "always"
-signing_protocol = "sigv4" 
+  name                              = "myoac"
+  origin_access_control_origin_type = "s3"
+  signing_behavior                  = "always"
+  signing_protocol                  = "sigv4"
 }
 
 #Creating cloudfront distribution
 resource "aws_cloudfront_distribution" "poc_distribution" {
- origin {
-    domain_name              = aws_s3_bucket.pocproject.bucket_regional_domain_name
-    origin_access_control_id = aws_cloudfront_origin_access_control.pocoac.id
-    origin_id                = "myS3Origin"
+  origin_group {
+    origin_id = "groupS3"
+
+    failover_criteria {
+      status_codes = [403, 404, 500, 502]
+    }
+
+    member {
+      origin_id = "primaryS3"
+    }
+
+    member {
+      origin_id = "failoverS3"
+    }
   }
 
-  enabled             = true
-default_cache_behavior {
-    allowed_methods  = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
+
+  origin {
+    domain_name              = aws_s3_bucket.pocproject["pocbucket1"].bucket_regional_domain_name
+    origin_access_control_id = aws_cloudfront_origin_access_control.pocoac.id
+    origin_id                = "primaryS3"
+  }
+
+  origin {
+    domain_name              = aws_s3_bucket.pocproject["pocbucket2"].bucket_regional_domain_name
+    origin_access_control_id = aws_cloudfront_origin_access_control.pocoac.id
+    origin_id                = "failoverS3"
+  }
+
+  enabled = true
+  default_cache_behavior {
+    allowed_methods  = ["GET", "HEAD"]
     cached_methods   = ["GET", "HEAD"]
-    target_origin_id = "myS3Origin"
+    target_origin_id = "groupS3"
 
     forwarded_values {
       query_string = false
@@ -108,7 +164,7 @@ default_cache_behavior {
     max_ttl                = 86400
   }
 
-restrictions {
+  restrictions {
     geo_restriction {
       restriction_type = "none"
     }
