@@ -3,7 +3,7 @@ output "primary_bucket_name" {
   value       = aws_s3_bucket.pocproject["pocbucket1"].id
 }
 output "secondary_bucket_name" {
-  descriptionb = "Bucket name of secondary bucket"
+  description = "Bucket name of secondary bucket"
   value = aws_s3_bucket.pocproject["pocbucket2"].id
 }
 output "distribution_domain" {
