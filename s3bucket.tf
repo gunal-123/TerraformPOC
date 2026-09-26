@@ -32,41 +32,15 @@ resource "aws_s3_bucket" "pocproject" {
   }
 }
 
-#Upload two objects to bucket
-locals {
-  objects = {
-    "index.html" = "${path.module}/index.html"
-    "error.html" = "${path.module}/error.html"
+#Enabling versioning
+resource "aws_s3_bucket_versioning" "poc_versioning" {
+  for_each = aws_s3_bucket.pocproject
+  bucket   = each.value.id
+  versioning_configuration {
+    status = "Enabled"
   }
 }
 
-resource "aws_s3_object" "pocobject" {
-  for_each = {
-    for pair in setproduct(
-      keys(aws_s3_bucket.pocproject),
-      keys(local.objects)
-    ) :
-    "${pair[0]}-${pair[1]}" => {
-      bucket = pair[0]
-      key    = pair[1]
-      source = local.objects[pair[1]]
-    }
-  }
-  bucket       = aws_s3_bucket.pocproject[each.value.bucket].id
-  key          = each.value.key
-  source       = each.value.source
-  content_type = "text/html"
-}
-
-
-#Block all public access
-#resource "aws_s3_bucket_public_access_block" "pocprivate" {
-#bucket = aws_s3_bucket.pocproject.id
-# block_public_acls       = true
-#  block_public_policy     = true
-#  ignore_public_acls      = true
-#  restrict_public_buckets = true
-#}
 
 #Adding bucket policy
 resource "aws_s3_bucket_policy" "cloudfront_policy" {
@@ -96,14 +70,6 @@ data "aws_iam_policy_document" "cloudfront_policy" {
   }
 }
 
-#Enabling versioning
-resource "aws_s3_bucket_versioning" "poc_versioning" {
-  for_each = aws_s3_bucket.pocproject
-  bucket   = each.value.id
-  versioning_configuration {
-    status = "Enabled"
-  }
-}
 
 #Creating origin access control
 resource "aws_cloudfront_origin_access_control" "pocoac" {
