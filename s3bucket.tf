@@ -140,5 +140,5 @@ resource "aws_cloudfront_distribution" "poc_distribution" {
     cloudfront_default_certificate = true
   }
 
-  default_root_object = "index.html"
+  default_root_object = "pages/index.html"
 }
