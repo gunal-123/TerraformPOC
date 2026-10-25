@@ -1,0 +1,25 @@
+pipeline {
+    agent any
+    environment {
+        AWS_CRED = credentials('dfc9e103-3678-426e-89b5-e670590c1b30')
+        AWS_DEFAULT_REGION = 'us-east-1'
+    }
+    stages {
+        stage ('Clone') {
+            steps {
+                checkout scmGit(
+                    branches: [[name: '*/main']],
+                    userRemoteConfigs: [[credentialsId: 'eb0e167d-13d9-4045-8240-760541fd6d79', 
+                                         url: 'https://github.com/gunal-123/TerraformPOC.git']])
+            }
+        }
+        stage ('upload objects') {
+            steps {
+                s3Upload(
+                    bucket: 'primary-371637912198-us-east-1-an',
+                    file: 'pages',
+                    path: 'pages')
+            }
+        }
+    }
+}
