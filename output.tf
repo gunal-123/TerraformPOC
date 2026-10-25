@@ -1,10 +1,10 @@
 output "primary_bucket_name" {
   description = "Bucket name of primary bucket"
-  value       = aws_s3_bucket.pocproject["pocbucket1"].id
+  value       = aws_s3_bucket.primary_bucket.id
 }
 output "secondary_bucket_name" {
   description = "Bucket name of secondary bucket"
-  value = aws_s3_bucket.pocproject["pocbucket2"].id
+  value       = aws_s3_bucket.secondary_bucket.id
 }
 output "distribution_domain" {
   description = "Domain name of cloudfront distribution"

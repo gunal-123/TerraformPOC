@@ -1,57 +1,54 @@
-#Define bucket name
-locals {
-  bucket_names = ["pocbucket1", "pocbucket2"]
-}
-
-# Create bucket using regional-namespace
 data "aws_caller_identity" "current" {}
 data "aws_region" "current" {}
-
-resource "aws_s3_bucket" "pocproject" {
-  for_each         = toset(local.bucket_names)
-  bucket           = format("%s-%s-%s-an", each.key, data.aws_caller_identity.current.account_id, data.aws_region.current.region)
-  bucket_namespace = "account-regional"
-
-  tags = {
-    Name        = "project"
-    Environment = "Dev"
-  }
+data "aws_region" "aliased" {
+  provider = aws.secondary
 }
 
-#Enabling versioning
-resource "aws_s3_bucket_versioning" "poc_versioning" {
-  for_each = aws_s3_bucket.pocproject
-  bucket   = each.value.id
+resource "aws_s3_bucket" "primary_bucket" {
+  bucket           = format("primary-%s-%s-an", data.aws_caller_identity.current.account_id, data.aws_region.current.region)
+  bucket_namespace = "account-regional"
+}
+
+resource "aws_s3_bucket_versioning" "primary_bucket" {
+  bucket = aws_s3_bucket.primary_bucket.id
   versioning_configuration {
     status = "Enabled"
   }
 }
 
-
-#Adding bucket policy
-resource "aws_s3_bucket_policy" "cloudfront_policy" {
-  for_each = aws_s3_bucket.pocproject
-  bucket   = each.value.id
-  policy   = data.aws_iam_policy_document.cloudfront_policy[each.key].json
+resource "aws_s3_bucket" "secondary_bucket" {
+provider = aws.secondary
+  bucket           = format("secondary-%s-%s-an", data.aws_caller_identity.current.account_id, data.aws_region.aliased.region)
+  bucket_namespace = "account-regional"
 }
 
-data "aws_iam_policy_document" "cloudfront_policy" {
-  for_each = aws_s3_bucket.pocproject
-  statement {
-    sid    = "allowCloudfrontAccess"
-    effect = "Allow"
-    principals {
-      type        = "Service"
-      identifiers = ["cloudfront.amazonaws.com"]
-    }
-    actions = ["s3:GetObject"]
-    resources = [
-      "${each.value.arn}/*"
-    ]
-    condition {
-      test     = "StringEquals"
-      variable = "AWS:SourceArn"
-      values   = [aws_cloudfront_distribution.poc_distribution.arn]
+resource "aws_s3_bucket_versioning" "secondary_bucket" {
+provider = aws.secondary
+  bucket = aws_s3_bucket.secondary_bucket.id
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+resource "aws_s3_bucket_replication_configuration" "replication" {
+  
+
+  # Must have bucket versioning enabled first
+  depends_on = [aws_s3_bucket_versioning.primary_bucket]
+
+  role   = aws_iam_role.replication.arn
+  bucket = aws_s3_bucket.primary_bucket.id
+
+  rule {
+    id = "htmlrule"
+
+    filter {}
+
+    status = "Enabled"
+
+    destination {
+      bucket        = aws_s3_bucket.secondary_bucket.arn
+      storage_class = "STANDARD"
     }
   }
 }

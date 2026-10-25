@@ -26,13 +26,13 @@ resource "aws_cloudfront_distribution" "poc_distribution" {
 
 
   origin {
-    domain_name              = aws_s3_bucket.pocproject["pocbucket1"].bucket_regional_domain_name
+    domain_name              = aws_s3_bucket.primary_bucket.bucket_regional_domain_name
     origin_access_control_id = aws_cloudfront_origin_access_control.pocoac.id
     origin_id                = "primaryS3"
   }
 
   origin {
-    domain_name              = aws_s3_bucket.pocproject["pocbucket2"].bucket_regional_domain_name
+    domain_name              = aws_s3_bucket.secondary_bucket.bucket_regional_domain_name
     origin_access_control_id = aws_cloudfront_origin_access_control.pocoac.id
     origin_id                = "failoverS3"
   }
