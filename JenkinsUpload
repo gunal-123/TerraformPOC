@@ -16,9 +16,35 @@ pipeline {
         stage ('upload objects') {
             steps {
                 s3Upload(
-                    bucket: 'primary-371637912198-us-east-1-an',
+                    bucket: 'primary-404006608273-us-east-1-an',
                     file: 'pages',
                     path: 'pages')
+            }
+        }
+        stage ('wait') {
+            steps {
+                sleep time: 1, unit: 'MINUTES'
+            }
+        }
+        stage ('delete') {
+            steps {
+                s3Delete bucket: 'primary-404006608273-us-east-1-an', path: 'pages/index.html'
+            }
+        }
+        stage ('invalidation') {
+            steps {
+                sh '''aws cloudfront create-invalidation --distribution-id E1NSB5CTJBP7FC --paths "/pages/index.html"'''
+            }
+        }
+        stage ('test upload') {
+             environment {
+                AWS_DEFAULT_REGION = 'us-west-2'
+            }
+            steps {
+                s3Upload(
+                    bucket: 'secondary-404006608273-us-west-2-an',
+                    file: 'test/index.html',
+                    path: 'pages/index.html')
             }
         }
     }
