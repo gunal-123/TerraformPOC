@@ -54,10 +54,11 @@ pipeline {
         stage ('approve') {
             steps {
                 timeout(activity: true, time: 1) {
-                    input message: 'Do you want to perform these actions?', ok: 'yes', 
-                    parameters: [choice(choices: ['yes', 'no'], 
-                    name: 'terraform apply')]
-                 }
+                     input cancel: 'abort.... abort.... abort', 
+                    id: '1', 
+                    message: 'Do you want to perform these actions? Proceed or Abort', 
+                    ok: 'Approve', 
+                    submitter: 'cloud_user', submitterParameter: 'Approver'              }
                 
             }
         }
