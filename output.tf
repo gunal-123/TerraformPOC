@@ -10,3 +10,7 @@ output "distribution_domain" {
   description = "Domain name of cloudfront distribution"
   value       = aws_cloudfront_distribution.poc_distribution.domain_name
 }
+output "distribution_domain_id" {
+description = "Domain id of cloudfront distribution"
+value = aws_cloudfront_distribution.poc_distribution.id
+}
