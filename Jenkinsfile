@@ -54,11 +54,10 @@ pipeline {
         stage ('approve') {
             steps {
                 timeout(activity: true, time: 1) {
-                     input cancel: 'abort.... abort.... abort', 
-                    id: '1', 
-                    message: 'Do you want to perform these actions? Proceed or Abort', 
-                    ok: 'Approve', 
-                    submitter: 'cloud_user', submitterParameter: 'Approver'              }
+                    input message: 'Do you want to perform these actions?', ok: 'yes', 
+                    parameters: [choice(choices: ['yes', 'no'], 
+                    name: 'terraform apply')]
+                 }
                 
             }
         }
@@ -76,10 +75,27 @@ pipeline {
                     script: 'terraform output -raw secondary_bucket_name',
                     returnStdout: true
                     ).trim()
+                    
+                env.domain_id = sh(
+                    script: 'terraform output -raw distribution_domain_id',
+                    returnStdout: true
+                    ).trim()
             }
         }
         }
-        
-        
+        stage('Trigger Downstream') {
+            steps {
+                script {
+                    // Pass the dynamic variable to the downstream job
+                    build job: 'uploadPipeline', 
+                    wait: false, 
+                    parameters: [
+                        string(name: 'primaryBucket', value: env.primary_bucket),
+                        string(name: 'secondaryBucket', value: env.secondary_bucket),
+                        string(name: 'domainID', value: env.domain_id)
+                    ]
+                }
+            }
+        }
     }
 }

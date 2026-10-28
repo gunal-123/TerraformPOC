@@ -4,6 +4,11 @@ pipeline {
         AWS_CRED = credentials('dfc9e103-3678-426e-89b5-e670590c1b30')
         AWS_DEFAULT_REGION = 'us-east-1'
     }
+    parameters {
+        string(name: 'primaryBucket', description: 'Primary bucket name')
+        string(name: 'secondaryBucket', description: 'Secondary bucket name')
+        string(name: 'domainID', description: 'Distribution domain id')
+    }
     stages {
         stage ('Clone') {
             steps {
@@ -16,7 +21,7 @@ pipeline {
         stage ('upload objects') {
             steps {
                 s3Upload(
-                    bucket: 'primary-404006608273-us-east-1-an',
+                    bucket: "${params.primaryBucket}",
                     file: 'pages',
                     path: 'pages')
             }
@@ -28,12 +33,12 @@ pipeline {
         }
         stage ('delete') {
             steps {
-                s3Delete bucket: 'primary-404006608273-us-east-1-an', path: 'pages/index.html'
+                s3Delete bucket: "${params.primaryBucket}", path: 'pages/index.html'
             }
         }
         stage ('invalidation') {
             steps {
-                sh '''aws cloudfront create-invalidation --distribution-id E1NSB5CTJBP7FC --paths "/pages/index.html"'''
+                sh """aws cloudfront create-invalidation --distribution-id "${params.domainID}" --paths \"/pages/index.html\""""
             }
         }
         stage ('test upload') {
@@ -42,7 +47,7 @@ pipeline {
             }
             steps {
                 s3Upload(
-                    bucket: 'secondary-404006608273-us-west-2-an',
+                    bucket: "${params.secondaryBucket}",
                     file: 'test/index.html',
                     path: 'pages/index.html')
             }
